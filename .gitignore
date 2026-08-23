@@ -1,0 +1,7 @@
+store/
+*.log
+.env
+waha/.env
+import-result.json
+__pycache__/
+node_modules/

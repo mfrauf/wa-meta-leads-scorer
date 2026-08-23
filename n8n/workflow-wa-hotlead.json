@@ -1,5 +1,5 @@
 {
-  "updatedAt": "2026-08-21T12:26:15.153Z",
+  "updatedAt": "2026-08-23T07:54:25.500Z",
   "createdAt": "2026-08-21T04:05:54.749Z",
   "id": "lNnorqofr6QwSG9a",
   "name": "WA Hot Lead Scorer",
@@ -11,8 +11,7 @@
       "parameters": {
         "httpMethod": "POST",
         "path": "wa-hotlead",
-        "options": {},
-        "responseData": "raw"
+        "options": {}
       },
       "id": "3d1ea15d3ac34d4ba241a7ee",
       "name": "WhatsApp Webhook",
@@ -39,7 +38,7 @@
     },
     {
       "parameters": {
-        "jsCode": "\nconst fs = require('fs');\nconst path = require('path');\nconst crypto = require('crypto');\nconst STORE = '/opt/data/projects/wa-hot-lead/store/messages.jsonl' || '/opt/data/projects/wa-hot-lead/store/messages.jsonl';\nconst storeDir = path.dirname(STORE);\nif (!fs.existsSync(storeDir)) {\n  try { fs.mkdirSync(storeDir, { recursive: true }); } catch (e) {}\n}\nconst items = $input.all();\nconst out = [];\nfor (const item of items) {\n  const root = item.json || {};\n  const envObj = (typeof root.body === 'string') ? JSON.parse(root.body) : root;\n  const p = root.payload || envObj.payload || envObj || root;\n  const rawSender = String(p.from || p.sender || '');\n  const sender = rawSender.replace('@c.us', '').replace(/\\D/g, '');\n  const message = String(p.body !== undefined ? p.body : (p.message || ''));\n  const direction = p.fromMe ? 'outbound' : 'inbound';\n  const is_group = !!(p.from && String(p.from).endsWith('@g.us')) || !!p.is_group;\n  const ts = p.timestamp ? Number(p.timestamp) : Math.floor(Date.now() / 1000);\n  const message_id = String(p.id || p.message_id || (sender + ':' + ts + ':' + crypto.createHash('sha1').update(message).digest('hex').slice(0, 12)));\n  let lines = [];\n  try {\n    if (fs.existsSync(STORE)) {\n      lines = fs.readFileSync(STORE, 'utf8').split('\\n').filter(Boolean);\n    }\n  } catch (e) {}\n  const dup = lines.some(l => {\n    try { return JSON.parse(l).message_id === message_id; } catch (e) { return false; }\n  });\n  if (!dup) {\n    const rec = { message_id, sender, message, direction, is_group, timestamp: ts, received_at: Date.now() };\n    try { fs.appendFileSync(STORE, JSON.stringify(rec) + '\\n'); } catch (e) {}\n    out.push({ json: { sender, message, direction, is_group, timestamp: ts, message_id, is_duplicate: false } });\n  }\n}\nreturn out;\n"
+        "jsCode": "const crypto = require('crypto');\nconst fs = require('fs');\nconst path = require('path');\nconst STORE = '/opt/data/projects/wa-hot-lead/store/messages.jsonl';\nconst storeDir = path.dirname(STORE);\nif (!fs.existsSync(storeDir)) { try { fs.mkdirSync(storeDir, { recursive: true }); } catch (e) {} }\n\nconst items = $input.all();\nconst out = [];\nfor (const item of items) {\n  const root = item.json || {};\n  const envObj = (typeof root.body === 'string') ? (()=>{ try { return JSON.parse(root.body); } catch(e){ return {}; } })() : (root.body || {});\n  const env = Object.keys(envObj).length ? envObj : root;\n  const p = env.payload || env;\n\n  // ---- sender / phone extraction ----\n  const fromRaw = String(p.from || p.sender || '');\n  const isLid = fromRaw.includes('@lid');\n  const digitsOnly = fromRaw.split('@')[0].replace(/\\D/g, '');\n  const isGroup = !!(p.from && String(p.from).endsWith('@g.us')) || !!p.is_group;\n  // group messages have no single lead sender -> never Meta-matchable\n  const phoneE164 = (!isLid && !isGroup && /^\\d{8,16}$/.test(digitsOnly)) ? digitsOnly : '';\n  const metaMatchable = Boolean(phoneE164);\n  const phoneHash = metaMatchable ? crypto.createHash('sha256').update(phoneE164.trim()).digest('hex') : null;\n  const senderDisplay = isGroup ? fromRaw : (isLid ? digitsOnly + '@lid' : phoneE164);\n\n  // ---- message + dedupe + store ----\n  const message = String(p.body !== undefined ? p.body : (p.message || ''));\n  const direction = p.fromMe ? 'outbound' : 'inbound';\n  const ts = p.timestamp ? Number(p.timestamp) : Math.floor(Date.now() / 1000);\n  const message_id = String(p.id || p.message_id || (senderDisplay + ':' + ts + ':' + crypto.createHash('sha1').update(message).digest('hex').slice(0, 12)));\n  let lines = [];\n  try { if (fs.existsSync(STORE)) lines = fs.readFileSync(STORE, 'utf8').split('\\n').filter(Boolean); } catch (e) {}\n  const dup = lines.some(l => { try { return JSON.parse(l).message_id === message_id; } catch (e) { return false; } });\n  if (!dup) {\n    try { fs.appendFileSync(STORE, JSON.stringify({ message_id, sender: senderDisplay, message, direction, is_group: isGroup, timestamp: ts, received_at: Date.now(), sender_type: isLid?'lid':'phone', meta_matchable: metaMatchable }) + '\\n'); } catch (e) {}\n    out.push({ json: { sender: senderDisplay, sender_type: isLid?'lid':'phone', phone_e164: phoneE164, phone_hash_sha256: phoneHash, meta_matchable: metaMatchable, message, direction, is_group: isGroup, timestamp: ts, message_id, is_duplicate: false } });\n  }\n}\nreturn out;\n"
       },
       "id": "3429e95954824564a5d3207c",
       "name": "Normalize & Dedupe",
@@ -64,22 +63,20 @@
       ]
     },
     {
+      "parameters": {
+        "jsCode": "return $input.all();"
+      },
       "id": "b0800165c6be4ae994df6c0b",
       "name": "Route Hot?",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
         1440,
-        304
-      ],
-      "parameters": {
-        "mode": "runOnceForAllItems",
-        "jsCode": "return $input.all();"
-      }
+        208
+      ]
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
         "jsCode": "\nconst items=$input.all();\nreturn items.filter(i=>(i.json.lead_level||'')==='hot').map(i=>({json:{...i.json, alert:`${i.json.sender} HOT (${i.json.score}): ${i.json.message}`}}));\n"
       },
       "id": "df2a85f87fcc4367afae016b",
@@ -94,13 +91,13 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://graph.facebook.com/v22.0/REPLACE_PIXEL_ID/events",
+        "url": "https://graph.facebook.com/v22.0/YOUR_PIXEL_ID/events",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
             {
               "name": "Authorization",
-              "value": "Bearer REPLACE_ACCESS_TOKEN"
+              "value": "Bearer REPLACE_CAPI_TOKEN"
             }
           ]
         },
@@ -108,38 +105,25 @@
         "bodyParameters": {
           "parameters": [
             {
-              "name": "event_name",
-              "value": "QualifiedLead"
-            },
-            {
-              "name": "event_time",
-              "value": "={{ Math.floor(Date.now()/1000) }}"
-            },
-            {
-              "name": "action_source",
-              "value": "system_generated"
-            },
-            {
-              "name": "user_data",
-              "value": "={{ JSON.stringify({ ph: [] }) }}"
+              "name": "data",
+              "value": "={{ JSON.stringify([{ event_name: $json.event_name, event_time: Math.floor(Date.now()/1000), event_id: $json.message_id, action_source: 'system_generated', user_data: { ph: [$json.phone_hash_sha256] } }]) }}"
             }
           ]
         },
         "options": {}
       },
       "id": "399cbe58a33141dc9406134c",
-      "name": "Send QualifiedLead to Meta (disabled)",
+      "name": "Send Lead Events to Meta CAPI",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
       "position": [
         1680,
         368
       ],
-      "disabled": true
+      "disabled": false
     },
     {
       "parameters": {
-        "mode": "runOnceForAllItems",
         "jsCode": "\nconst items=$input.all();\nreturn items.filter(i=>(i.json.lead_level||'')!=='hot').map(i=>({json:{lead_level:i.json.lead_level, score:i.json.score}}));\n"
       },
       "id": "d1a9809beaf346ddbf4f0a10",
@@ -148,7 +132,7 @@
       "typeVersion": 2,
       "position": [
         1680,
-        528
+        576
       ]
     },
     {
@@ -171,26 +155,36 @@
         "operation": "append",
         "documentId": {
           "__rl": true,
-          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit",
+          "value": "https://docs.google.com/spreadsheets/d/1iLRJsZR-YfzjRRDyZH1fCcmngU_zFGdrwo7kfZeIb2c/edit",
           "mode": "url"
         },
         "sheetName": {
           "mode": "name",
           "__rl": false,
-          "value": "Leads"
+          "value": "Leads_Live"
         },
         "columns": {
-          "mappingMode": "defineBelow",
+          "mappingMode": "autoMapInputData",
           "value": {
-            "sender": "={{ $json.sender }}",
-            "message": "={{ $json.message }}",
-            "score": "={{ $json.score }}",
-            "lead_level": "={{ $json.lead_level }}",
-            "signals": "={{ JSON.stringify($json.signals) }}",
-            "direction": "={{ $json.direction }}",
-            "timestamp": "={{ $json.timestamp }}",
-            "message_id": "={{ $json.message_id }}"
-          }
+            "meta_matchable": "={{ $json.meta_matchable }}"
+          },
+          "matchingColumns": [
+            "Leads_Live"
+          ],
+          "schema": [
+            {
+              "id": "Leads_Live",
+              "displayName": "Leads_Live",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
         },
         "options": {}
       },
@@ -200,27 +194,84 @@
       "typeVersion": 4,
       "position": [
         1440,
-        480
+        512
       ],
       "credentials": {
         "googleSheetsOAuth2Api": {
           "id": "pItf5QvUkSi97F5z",
-          "name": "Google Sheets account"
+          "name": "Google Sheets account 2"
         }
       }
     },
     {
+      "parameters": {
+        "jsCode": "const https = require('https');\nconst fs = require('fs');\nconst PROMPT = fs.readFileSync('/opt/data/projects/wa-hot-lead/scoring/llm-classify-prompt.md', 'utf8').trim();\nconst KEY = '${OPENROUTER_API_KEY}';\nconst PRIMARY = 'nvidia/nemotron-3-ultra-550b-a55b:free';\nconst FALLBACK = 'nvidia/nemotron-3-super-120b-a12b:free';\n\nfunction callLLM(model, userContent) {\n  return new Promise((resolve, reject) => {\n    const payload = JSON.stringify({\n      model,\n      messages: [\n        { role: 'system', content: PROMPT + '\\n\\nBALAS HANYA JSON valid dengan bentuk: {\"lead_level\":\"hot|warm|cold\",\"score\":0-100,\"signals\":[],\"intent\":\"\",\"reason\":\"\"}. Tanpa teks lain.' },\n        { role: 'user', content: userContent }\n      ],\n      response_format: { type: 'json_object' },\n      max_tokens: 300, temperature: 0.2\n    });\n    const req = https.request('https://openrouter.ai/api/v1/chat/completions', {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + KEY, 'Content-Length': Buffer.byteLength(payload) }\n    }, (res) => {\n      let data = '';\n      res.on('data', c => data += c);\n      res.on('end', () => {\n        if (res.statusCode !== 200) { reject(new Error('http ' + res.statusCode)); return; }\n        try {\n          const j = JSON.parse(data);\n          resolve((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '');\n        } catch (e) { reject(new Error('bad json')); }\n      });\n    });\n    req.on('error', reject);\n    req.setTimeout(25000, () => { req.destroy(new Error('timeout')); });\n    req.write(payload); req.end();\n  });\n}\n\nfunction sleep(ms) { return new Promise(r => setTimeout(r, ms)); }\n\nasync function classify(userContent) {\n  // primary with 1 retry\n  for (let i = 0; i < 2; i++) {\n    try { return { content: await callLLM(PRIMARY, userContent), model: PRIMARY }; } catch (e) { if (i === 0) await sleep(1500); }\n  }\n  // fallback model\n  try { return { content: await callLLM(FALLBACK, userContent), model: FALLBACK }; } catch (e) { return { content: null, model: null }; }\n}\n\nconst out = [];\nfor (const item of $input.all()) {\n  const msg = item.json.message || '';\n  const conv = item.json.conversation ? ('\\n\\nRiwayat:\\n' + item.json.conversation) : '';\n  const userContent = msg + conv;\n  let level = 'review', score = null, signals = [], intent = '', reason = 'LLM unavailable', usedModel = '';\n  const r = await classify(userContent);\n  usedModel = r.model || '';\n  if (r.content) {\n    try {\n      const s = r.content.indexOf('{'); const e2 = r.content.lastIndexOf('}');\n      const p = JSON.parse(r.content.slice(s, e2 + 1));\n      const lvl = (p.lead_level || '').toString().toLowerCase();\n      level = ['hot','warm','cold'].includes(lvl) ? lvl : 'review';\n      score = Number.isFinite(p.score) ? Math.max(0, Math.min(100, Math.round(p.score))) : null;\n      signals = Array.isArray(p.signals) ? p.signals.map(String) : [];\n      intent = String(p.intent || '');\n      reason = String(p.reason || '');\n      if (level === 'review') reason = 'non-conforming output: ' + String(r.content).slice(0, 120);\n    } catch (e) { level = 'review'; reason = 'parse error'; }\n  }\n  out.push({ json: { ...item.json, lead_level: level, score, signals, intent, reason, scorer_model: usedModel } });\n}\nreturn out;\n"
+      },
       "id": "scorellmhttps001",
       "name": "Score Lead (LLM)",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
       "position": [
-        840,
+        848,
         400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const fs = require('fs');\nconst LEVELS = '/opt/data/projects/wa-hot-lead/store/levels.jsonl';\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json || {};\n  // gate: only matchable phones participate in Meta signals\n  if (!j.meta_matchable || !j.phone_hash_sha256) continue;\n  const newLevel = (j.lead_level || '').toLowerCase();\n  if (!['hot','warm','cold'].includes(newLevel)) continue;\n\n  let prev = null;\n  try {\n    if (fs.existsSync(LEVELS)) {\n      const lines = fs.readFileSync(LEVELS, 'utf8').split('\\n').filter(Boolean);\n      for (let i = lines.length - 1; i >= 0; i--) {\n        try { const r = JSON.parse(lines[i]); if (r.phone_hash === j.phone_hash_sha256) { prev = r.level; break; } } catch (e) {}\n      }\n    }\n  } catch (e) {}\n\n  if (prev === newLevel) continue; // no state change -> no event\n  try { fs.appendFileSync(LEVELS, JSON.stringify({ phone_hash: j.phone_hash_sha256, level: newLevel, at: Date.now(), message_id: j.message_id }) + '\\n'); } catch (e) {}\n  out.push({ json: { ...j, event_name: 'Lead' + newLevel.charAt(0).toUpperCase() + newLevel.slice(1), previous_level: prev, level_changed: true } });\n}\nreturn out;\n"
+      },
+      "id": "metaevt001",
+      "name": "Lead State Machine",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        368
+      ]
+    },
+    {
+      "id": "purch001",
+      "name": "Detect Close (Purchase)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        650
       ],
       "parameters": {
         "mode": "runOnceForAllItems",
-        "jsCode": "const https = require('https');\nconst fs = require('fs');\nconst PROMPT_PATH = '/opt/data/projects/wa-hot-lead/scoring/llm-classify-prompt.md';\nlet PROMPT = '';\ntry { PROMPT = fs.readFileSync(PROMPT_PATH, 'utf8').trim(); } catch (e) {}\nconst KEY = '${OPENROUTER_API_KEY}';\nfunction callLLM(userContent) {\n  return new Promise((resolve, reject) => {\n    const payload = JSON.stringify({\n      model: 'openai/gpt-oss-20b:free',\n      messages: [ { role: 'system', content: PROMPT }, { role: 'user', content: userContent } ],\n      response_format: { type: 'json_object' },\n      max_tokens: 300, temperature: 0.2\n    });\n    const req = https.request('https://openrouter.ai/api/v1/chat/completions', {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + KEY, 'Content-Length': Buffer.byteLength(payload) }\n    }, (res) => {\n      let data = '';\n      res.on('data', c => data += c);\n      res.on('end', () => { try { resolve(JSON.parse(data)); } catch(e) { reject(new Error('bad json: ' + data.slice(0,80))); } });\n    });\n    req.on('error', reject);\n    req.write(payload); req.end();\n  });\n}\nconst out = [];\nfor (const item of $input.all()) {\n  const msg = item.json.message || '';\n  const conv = item.json.conversation ? ('\\n\\nRiwayat:\\n' + item.json.conversation) : '';\n  const userContent = PROMPT + '\\n\\nBALAS HANYA JSON valid, tanpa teks pembuka:\\n' + msg + conv;\n  let level='review', score=null, signals=[], intent='', reason='LLM unavailable';\n  try {\n    const resp = await callLLM(userContent);\n    const content = (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || '{}';\n    const p = JSON.parse(content);\n    const lvl = (p.lead_level||'').toString().toLowerCase();\n    level = ['hot','warm','cold'].includes(lvl) ? lvl : 'review';\n    score = Number.isFinite(p.score) ? Math.max(0,Math.min(100,Math.round(p.score))) : null;\n    signals = Array.isArray(p.signals) ? p.signals.map(String) : [];\n    intent = String(p.intent||'');\n    reason = String(p.reason||'');\n  } catch(e) { level='review'; reason='LLM error: ' + e.message; }\n  out.push({ json: { ...item.json, lead_level: level, score, signals, intent, reason } });\n}\nreturn out;\n"
+        "jsCode": "const crypto = require('crypto');\nconst fs = require('fs');\nconst LEVELS = '/opt/data/projects/wa-hot-lead/store/levels.jsonl';\nconst CLOSED = '/opt/data/projects/wa-hot-lead/store/closed.jsonl';\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json || {};\n  const msg = String(j.message || '').trim();\n  const m = msg.match(/^close\\s+(\\d{8,16})(?:\\s+(\\d[\\d,.]*))?$/i);\n  if (!m || j.direction !== 'outbound') continue;\n  const phone = m[1];\n  const value = m[2] ? Number(m[2].replace(/[.,]/g,'')) : null;\n  const ph = crypto.createHash('sha256').update(phone.trim()).digest('hex');\n  // dedupe: same phone closed before?\n  let already = false;\n  try {\n    if (fs.existsSync(CLOSED)) {\n      already = fs.readFileSync(CLOSED,'utf8').split('\\n').filter(Boolean)\n        .some(l => { try { return JSON.parse(l).phone_hash === ph; } catch(e){ return false; } });\n    }\n  } catch(e){}\n  if (already) continue;\n  try { fs.appendFileSync(CLOSED, JSON.stringify({ phone_hash: ph, value, at: Date.now(), message_id: j.message_id }) + '\\n'); } catch(e){}\n  out.push({ json: { ...j, is_purchase: true, phone_hash_sha256: ph, purchase_value: value, event_name: 'Purchase' } });\n}\nreturn out;\n"
+      }
+    },
+    {
+      "id": "purch002",
+      "name": "Send Purchase to Meta CAPI",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1680,
+        650
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v22.0/YOUR_PIXEL_ID/events",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REPLACE_CAPI_TOKEN"
+            },
+            {
+              "name": "Content-Type",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ data: [ { event_name: 'Purchase', event_time: Math.floor(Date.now()/1000), event_id: 'purchase_' + $json.message_id, action_source: 'system_generated', user_data: { ph: [$json.phone_hash_sha256] }, custom_data: { currency: 'IDR', value: $json.purchase_value || 0 } } ] }) }}",
+        "options": {}
       }
     }
   ],
@@ -288,7 +339,12 @@
             "index": 0
           },
           {
-            "node": "Send QualifiedLead to Meta (disabled)",
+            "node": "Lead State Machine",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Detect Close (Purchase)",
             "type": "main",
             "index": 0
           }
@@ -305,19 +361,42 @@
           }
         ]
       ]
+    },
+    "Lead State Machine": {
+      "main": [
+        [
+          {
+            "node": "Send Lead Events to Meta CAPI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Close (Purchase)": {
+      "main": [
+        [
+          {
+            "node": "Send Purchase to Meta CAPI",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {
     "executionOrder": "v1",
-    "binaryMode": "separate"
+    "binaryMode": "separate",
+    "availableInMCP": true
   },
   "staticData": null,
   "meta": null,
   "nodeGroups": [],
   "pinData": {},
-  "versionId": "eb21b155-1f95-4d11-9044-595c562aacdc",
-  "activeVersionId": "eb21b155-1f95-4d11-9044-595c562aacdc",
-  "versionCounter": 32,
+  "versionId": "99344ac6-89ca-4b02-83f1-19be49d54e18",
+  "activeVersionId": "99344ac6-89ca-4b02-83f1-19be49d54e18",
+  "versionCounter": 52,
   "triggerCount": 1,
   "sourceWorkflowId": null,
   "shared": [
@@ -328,10 +407,10 @@
       "workflowId": "lNnorqofr6QwSG9a",
       "projectId": "W5y7F8Arhv8VLsU6",
       "project": {
-        "updatedAt": "2026-08-15T02:53:56.885Z",
+        "updatedAt": "2026-08-23T06:04:30.613Z",
         "createdAt": "2026-08-15T02:52:45.039Z",
         "id": "W5y7F8Arhv8VLsU6",
-        "name": "Admin Local <admin@local.n8n.io>",
+        "name": "Admin Local <hi@fathirauf.com>",
         "type": "personal",
         "icon": null,
         "description": null,
@@ -342,17 +421,16 @@
   ],
   "tags": [],
   "activeVersion": {
-    "updatedAt": "2026-08-21T12:26:15.158Z",
-    "createdAt": "2026-08-21T12:26:15.158Z",
-    "versionId": "eb21b155-1f95-4d11-9044-595c562aacdc",
+    "updatedAt": "2026-08-23T07:54:25.506Z",
+    "createdAt": "2026-08-23T07:54:25.506Z",
+    "versionId": "99344ac6-89ca-4b02-83f1-19be49d54e18",
     "workflowId": "lNnorqofr6QwSG9a",
     "nodes": [
       {
         "parameters": {
           "httpMethod": "POST",
           "path": "wa-hotlead",
-          "options": {},
-          "responseData": "raw"
+          "options": {}
         },
         "id": "3d1ea15d3ac34d4ba241a7ee",
         "name": "WhatsApp Webhook",
@@ -379,7 +457,7 @@
       },
       {
         "parameters": {
-          "jsCode": "\nconst fs = require('fs');\nconst path = require('path');\nconst crypto = require('crypto');\nconst STORE = '/opt/data/projects/wa-hot-lead/store/messages.jsonl' || '/opt/data/projects/wa-hot-lead/store/messages.jsonl';\nconst storeDir = path.dirname(STORE);\nif (!fs.existsSync(storeDir)) {\n  try { fs.mkdirSync(storeDir, { recursive: true }); } catch (e) {}\n}\nconst items = $input.all();\nconst out = [];\nfor (const item of items) {\n  const root = item.json || {};\n  const envObj = (typeof root.body === 'string') ? JSON.parse(root.body) : root;\n  const p = root.payload || envObj.payload || envObj || root;\n  const rawSender = String(p.from || p.sender || '');\n  const sender = rawSender.replace('@c.us', '').replace(/\\D/g, '');\n  const message = String(p.body !== undefined ? p.body : (p.message || ''));\n  const direction = p.fromMe ? 'outbound' : 'inbound';\n  const is_group = !!(p.from && String(p.from).endsWith('@g.us')) || !!p.is_group;\n  const ts = p.timestamp ? Number(p.timestamp) : Math.floor(Date.now() / 1000);\n  const message_id = String(p.id || p.message_id || (sender + ':' + ts + ':' + crypto.createHash('sha1').update(message).digest('hex').slice(0, 12)));\n  let lines = [];\n  try {\n    if (fs.existsSync(STORE)) {\n      lines = fs.readFileSync(STORE, 'utf8').split('\\n').filter(Boolean);\n    }\n  } catch (e) {}\n  const dup = lines.some(l => {\n    try { return JSON.parse(l).message_id === message_id; } catch (e) { return false; }\n  });\n  if (!dup) {\n    const rec = { message_id, sender, message, direction, is_group, timestamp: ts, received_at: Date.now() };\n    try { fs.appendFileSync(STORE, JSON.stringify(rec) + '\\n'); } catch (e) {}\n    out.push({ json: { sender, message, direction, is_group, timestamp: ts, message_id, is_duplicate: false } });\n  }\n}\nreturn out;\n"
+          "jsCode": "const crypto = require('crypto');\nconst fs = require('fs');\nconst path = require('path');\nconst STORE = '/opt/data/projects/wa-hot-lead/store/messages.jsonl';\nconst storeDir = path.dirname(STORE);\nif (!fs.existsSync(storeDir)) { try { fs.mkdirSync(storeDir, { recursive: true }); } catch (e) {} }\n\nconst items = $input.all();\nconst out = [];\nfor (const item of items) {\n  const root = item.json || {};\n  const envObj = (typeof root.body === 'string') ? (()=>{ try { return JSON.parse(root.body); } catch(e){ return {}; } })() : (root.body || {});\n  const env = Object.keys(envObj).length ? envObj : root;\n  const p = env.payload || env;\n\n  // ---- sender / phone extraction ----\n  const fromRaw = String(p.from || p.sender || '');\n  const isLid = fromRaw.includes('@lid');\n  const digitsOnly = fromRaw.split('@')[0].replace(/\\D/g, '');\n  const isGroup = !!(p.from && String(p.from).endsWith('@g.us')) || !!p.is_group;\n  // group messages have no single lead sender -> never Meta-matchable\n  const phoneE164 = (!isLid && !isGroup && /^\\d{8,16}$/.test(digitsOnly)) ? digitsOnly : '';\n  const metaMatchable = Boolean(phoneE164);\n  const phoneHash = metaMatchable ? crypto.createHash('sha256').update(phoneE164.trim()).digest('hex') : null;\n  const senderDisplay = isGroup ? fromRaw : (isLid ? digitsOnly + '@lid' : phoneE164);\n\n  // ---- message + dedupe + store ----\n  const message = String(p.body !== undefined ? p.body : (p.message || ''));\n  const direction = p.fromMe ? 'outbound' : 'inbound';\n  const ts = p.timestamp ? Number(p.timestamp) : Math.floor(Date.now() / 1000);\n  const message_id = String(p.id || p.message_id || (senderDisplay + ':' + ts + ':' + crypto.createHash('sha1').update(message).digest('hex').slice(0, 12)));\n  let lines = [];\n  try { if (fs.existsSync(STORE)) lines = fs.readFileSync(STORE, 'utf8').split('\\n').filter(Boolean); } catch (e) {}\n  const dup = lines.some(l => { try { return JSON.parse(l).message_id === message_id; } catch (e) { return false; } });\n  if (!dup) {\n    try { fs.appendFileSync(STORE, JSON.stringify({ message_id, sender: senderDisplay, message, direction, is_group: isGroup, timestamp: ts, received_at: Date.now(), sender_type: isLid?'lid':'phone', meta_matchable: metaMatchable }) + '\\n'); } catch (e) {}\n    out.push({ json: { sender: senderDisplay, sender_type: isLid?'lid':'phone', phone_e164: phoneE164, phone_hash_sha256: phoneHash, meta_matchable: metaMatchable, message, direction, is_group: isGroup, timestamp: ts, message_id, is_duplicate: false } });\n  }\n}\nreturn out;\n"
         },
         "id": "3429e95954824564a5d3207c",
         "name": "Normalize & Dedupe",
@@ -404,22 +482,20 @@
         ]
       },
       {
+        "parameters": {
+          "jsCode": "return $input.all();"
+        },
         "id": "b0800165c6be4ae994df6c0b",
         "name": "Route Hot?",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
         "position": [
           1440,
-          304
-        ],
-        "parameters": {
-          "mode": "runOnceForAllItems",
-          "jsCode": "return $input.all();"
-        }
+          208
+        ]
       },
       {
         "parameters": {
-          "mode": "runOnceForAllItems",
           "jsCode": "\nconst items=$input.all();\nreturn items.filter(i=>(i.json.lead_level||'')==='hot').map(i=>({json:{...i.json, alert:`${i.json.sender} HOT (${i.json.score}): ${i.json.message}`}}));\n"
         },
         "id": "df2a85f87fcc4367afae016b",
@@ -434,13 +510,13 @@
       {
         "parameters": {
           "method": "POST",
-          "url": "https://graph.facebook.com/v22.0/REPLACE_PIXEL_ID/events",
+          "url": "https://graph.facebook.com/v22.0/YOUR_PIXEL_ID/events",
           "sendHeaders": true,
           "headerParameters": {
             "parameters": [
               {
                 "name": "Authorization",
-                "value": "Bearer REPLACE_ACCESS_TOKEN"
+                "value": "Bearer REPLACE_CAPI_TOKEN"
               }
             ]
           },
@@ -448,38 +524,25 @@
           "bodyParameters": {
             "parameters": [
               {
-                "name": "event_name",
-                "value": "QualifiedLead"
-              },
-              {
-                "name": "event_time",
-                "value": "={{ Math.floor(Date.now()/1000) }}"
-              },
-              {
-                "name": "action_source",
-                "value": "system_generated"
-              },
-              {
-                "name": "user_data",
-                "value": "={{ JSON.stringify({ ph: [] }) }}"
+                "name": "data",
+                "value": "={{ JSON.stringify([{ event_name: $json.event_name, event_time: Math.floor(Date.now()/1000), event_id: $json.message_id, action_source: 'system_generated', user_data: { ph: [$json.phone_hash_sha256] } }]) }}"
               }
             ]
           },
           "options": {}
         },
         "id": "399cbe58a33141dc9406134c",
-        "name": "Send QualifiedLead to Meta (disabled)",
+        "name": "Send Lead Events to Meta CAPI",
         "type": "n8n-nodes-base.httpRequest",
         "typeVersion": 4,
         "position": [
           1680,
           368
         ],
-        "disabled": true
+        "disabled": false
       },
       {
         "parameters": {
-          "mode": "runOnceForAllItems",
           "jsCode": "\nconst items=$input.all();\nreturn items.filter(i=>(i.json.lead_level||'')!=='hot').map(i=>({json:{lead_level:i.json.lead_level, score:i.json.score}}));\n"
         },
         "id": "d1a9809beaf346ddbf4f0a10",
@@ -488,7 +551,7 @@
         "typeVersion": 2,
         "position": [
           1680,
-          528
+          576
         ]
       },
       {
@@ -511,26 +574,36 @@
           "operation": "append",
           "documentId": {
             "__rl": true,
-            "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit",
+            "value": "https://docs.google.com/spreadsheets/d/1iLRJsZR-YfzjRRDyZH1fCcmngU_zFGdrwo7kfZeIb2c/edit",
             "mode": "url"
           },
           "sheetName": {
             "mode": "name",
             "__rl": false,
-            "value": "Leads"
+            "value": "Leads_Live"
           },
           "columns": {
-            "mappingMode": "defineBelow",
+            "mappingMode": "autoMapInputData",
             "value": {
-              "sender": "={{ $json.sender }}",
-              "message": "={{ $json.message }}",
-              "score": "={{ $json.score }}",
-              "lead_level": "={{ $json.lead_level }}",
-              "signals": "={{ JSON.stringify($json.signals) }}",
-              "direction": "={{ $json.direction }}",
-              "timestamp": "={{ $json.timestamp }}",
-              "message_id": "={{ $json.message_id }}"
-            }
+              "meta_matchable": "={{ $json.meta_matchable }}"
+            },
+            "matchingColumns": [
+              "Leads_Live"
+            ],
+            "schema": [
+              {
+                "id": "Leads_Live",
+                "displayName": "Leads_Live",
+                "required": false,
+                "defaultMatch": false,
+                "display": true,
+                "type": "string",
+                "canBeUsedToMatch": true,
+                "removed": false
+              }
+            ],
+            "attemptToConvertTypes": false,
+            "convertFieldsToString": false
           },
           "options": {}
         },
@@ -540,27 +613,84 @@
         "typeVersion": 4,
         "position": [
           1440,
-          480
+          512
         ],
         "credentials": {
           "googleSheetsOAuth2Api": {
             "id": "pItf5QvUkSi97F5z",
-            "name": "Google Sheets account"
+            "name": "Google Sheets account 2"
           }
         }
       },
       {
+        "parameters": {
+          "jsCode": "const https = require('https');\nconst fs = require('fs');\nconst PROMPT = fs.readFileSync('/opt/data/projects/wa-hot-lead/scoring/llm-classify-prompt.md', 'utf8').trim();\nconst KEY = '${OPENROUTER_API_KEY}';\nconst PRIMARY = 'nvidia/nemotron-3-ultra-550b-a55b:free';\nconst FALLBACK = 'nvidia/nemotron-3-super-120b-a12b:free';\n\nfunction callLLM(model, userContent) {\n  return new Promise((resolve, reject) => {\n    const payload = JSON.stringify({\n      model,\n      messages: [\n        { role: 'system', content: PROMPT + '\\n\\nBALAS HANYA JSON valid dengan bentuk: {\"lead_level\":\"hot|warm|cold\",\"score\":0-100,\"signals\":[],\"intent\":\"\",\"reason\":\"\"}. Tanpa teks lain.' },\n        { role: 'user', content: userContent }\n      ],\n      response_format: { type: 'json_object' },\n      max_tokens: 300, temperature: 0.2\n    });\n    const req = https.request('https://openrouter.ai/api/v1/chat/completions', {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + KEY, 'Content-Length': Buffer.byteLength(payload) }\n    }, (res) => {\n      let data = '';\n      res.on('data', c => data += c);\n      res.on('end', () => {\n        if (res.statusCode !== 200) { reject(new Error('http ' + res.statusCode)); return; }\n        try {\n          const j = JSON.parse(data);\n          resolve((j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content) || '');\n        } catch (e) { reject(new Error('bad json')); }\n      });\n    });\n    req.on('error', reject);\n    req.setTimeout(25000, () => { req.destroy(new Error('timeout')); });\n    req.write(payload); req.end();\n  });\n}\n\nfunction sleep(ms) { return new Promise(r => setTimeout(r, ms)); }\n\nasync function classify(userContent) {\n  // primary with 1 retry\n  for (let i = 0; i < 2; i++) {\n    try { return { content: await callLLM(PRIMARY, userContent), model: PRIMARY }; } catch (e) { if (i === 0) await sleep(1500); }\n  }\n  // fallback model\n  try { return { content: await callLLM(FALLBACK, userContent), model: FALLBACK }; } catch (e) { return { content: null, model: null }; }\n}\n\nconst out = [];\nfor (const item of $input.all()) {\n  const msg = item.json.message || '';\n  const conv = item.json.conversation ? ('\\n\\nRiwayat:\\n' + item.json.conversation) : '';\n  const userContent = msg + conv;\n  let level = 'review', score = null, signals = [], intent = '', reason = 'LLM unavailable', usedModel = '';\n  const r = await classify(userContent);\n  usedModel = r.model || '';\n  if (r.content) {\n    try {\n      const s = r.content.indexOf('{'); const e2 = r.content.lastIndexOf('}');\n      const p = JSON.parse(r.content.slice(s, e2 + 1));\n      const lvl = (p.lead_level || '').toString().toLowerCase();\n      level = ['hot','warm','cold'].includes(lvl) ? lvl : 'review';\n      score = Number.isFinite(p.score) ? Math.max(0, Math.min(100, Math.round(p.score))) : null;\n      signals = Array.isArray(p.signals) ? p.signals.map(String) : [];\n      intent = String(p.intent || '');\n      reason = String(p.reason || '');\n      if (level === 'review') reason = 'non-conforming output: ' + String(r.content).slice(0, 120);\n    } catch (e) { level = 'review'; reason = 'parse error'; }\n  }\n  out.push({ json: { ...item.json, lead_level: level, score, signals, intent, reason, scorer_model: usedModel } });\n}\nreturn out;\n"
+        },
         "id": "scorellmhttps001",
         "name": "Score Lead (LLM)",
         "type": "n8n-nodes-base.code",
         "typeVersion": 2,
         "position": [
-          840,
+          848,
           400
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "const fs = require('fs');\nconst LEVELS = '/opt/data/projects/wa-hot-lead/store/levels.jsonl';\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json || {};\n  // gate: only matchable phones participate in Meta signals\n  if (!j.meta_matchable || !j.phone_hash_sha256) continue;\n  const newLevel = (j.lead_level || '').toLowerCase();\n  if (!['hot','warm','cold'].includes(newLevel)) continue;\n\n  let prev = null;\n  try {\n    if (fs.existsSync(LEVELS)) {\n      const lines = fs.readFileSync(LEVELS, 'utf8').split('\\n').filter(Boolean);\n      for (let i = lines.length - 1; i >= 0; i--) {\n        try { const r = JSON.parse(lines[i]); if (r.phone_hash === j.phone_hash_sha256) { prev = r.level; break; } } catch (e) {}\n      }\n    }\n  } catch (e) {}\n\n  if (prev === newLevel) continue; // no state change -> no event\n  try { fs.appendFileSync(LEVELS, JSON.stringify({ phone_hash: j.phone_hash_sha256, level: newLevel, at: Date.now(), message_id: j.message_id }) + '\\n'); } catch (e) {}\n  out.push({ json: { ...j, event_name: 'Lead' + newLevel.charAt(0).toUpperCase() + newLevel.slice(1), previous_level: prev, level_changed: true } });\n}\nreturn out;\n"
+        },
+        "id": "metaevt001",
+        "name": "Lead State Machine",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1440,
+          368
+        ]
+      },
+      {
+        "id": "purch001",
+        "name": "Detect Close (Purchase)",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1440,
+          650
         ],
         "parameters": {
           "mode": "runOnceForAllItems",
-          "jsCode": "const https = require('https');\nconst fs = require('fs');\nconst PROMPT_PATH = '/opt/data/projects/wa-hot-lead/scoring/llm-classify-prompt.md';\nlet PROMPT = '';\ntry { PROMPT = fs.readFileSync(PROMPT_PATH, 'utf8').trim(); } catch (e) {}\nconst KEY = '${OPENROUTER_API_KEY}';\nfunction callLLM(userContent) {\n  return new Promise((resolve, reject) => {\n    const payload = JSON.stringify({\n      model: 'openai/gpt-oss-20b:free',\n      messages: [ { role: 'system', content: PROMPT }, { role: 'user', content: userContent } ],\n      response_format: { type: 'json_object' },\n      max_tokens: 300, temperature: 0.2\n    });\n    const req = https.request('https://openrouter.ai/api/v1/chat/completions', {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + KEY, 'Content-Length': Buffer.byteLength(payload) }\n    }, (res) => {\n      let data = '';\n      res.on('data', c => data += c);\n      res.on('end', () => { try { resolve(JSON.parse(data)); } catch(e) { reject(new Error('bad json: ' + data.slice(0,80))); } });\n    });\n    req.on('error', reject);\n    req.write(payload); req.end();\n  });\n}\nconst out = [];\nfor (const item of $input.all()) {\n  const msg = item.json.message || '';\n  const conv = item.json.conversation ? ('\\n\\nRiwayat:\\n' + item.json.conversation) : '';\n  const userContent = PROMPT + '\\n\\nBALAS HANYA JSON valid, tanpa teks pembuka:\\n' + msg + conv;\n  let level='review', score=null, signals=[], intent='', reason='LLM unavailable';\n  try {\n    const resp = await callLLM(userContent);\n    const content = (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || '{}';\n    const p = JSON.parse(content);\n    const lvl = (p.lead_level||'').toString().toLowerCase();\n    level = ['hot','warm','cold'].includes(lvl) ? lvl : 'review';\n    score = Number.isFinite(p.score) ? Math.max(0,Math.min(100,Math.round(p.score))) : null;\n    signals = Array.isArray(p.signals) ? p.signals.map(String) : [];\n    intent = String(p.intent||'');\n    reason = String(p.reason||'');\n  } catch(e) { level='review'; reason='LLM error: ' + e.message; }\n  out.push({ json: { ...item.json, lead_level: level, score, signals, intent, reason } });\n}\nreturn out;\n"
+          "jsCode": "const crypto = require('crypto');\nconst fs = require('fs');\nconst LEVELS = '/opt/data/projects/wa-hot-lead/store/levels.jsonl';\nconst CLOSED = '/opt/data/projects/wa-hot-lead/store/closed.jsonl';\nconst out = [];\nfor (const item of $input.all()) {\n  const j = item.json || {};\n  const msg = String(j.message || '').trim();\n  const m = msg.match(/^close\\s+(\\d{8,16})(?:\\s+(\\d[\\d,.]*))?$/i);\n  if (!m || j.direction !== 'outbound') continue;\n  const phone = m[1];\n  const value = m[2] ? Number(m[2].replace(/[.,]/g,'')) : null;\n  const ph = crypto.createHash('sha256').update(phone.trim()).digest('hex');\n  // dedupe: same phone closed before?\n  let already = false;\n  try {\n    if (fs.existsSync(CLOSED)) {\n      already = fs.readFileSync(CLOSED,'utf8').split('\\n').filter(Boolean)\n        .some(l => { try { return JSON.parse(l).phone_hash === ph; } catch(e){ return false; } });\n    }\n  } catch(e){}\n  if (already) continue;\n  try { fs.appendFileSync(CLOSED, JSON.stringify({ phone_hash: ph, value, at: Date.now(), message_id: j.message_id }) + '\\n'); } catch(e){}\n  out.push({ json: { ...j, is_purchase: true, phone_hash_sha256: ph, purchase_value: value, event_name: 'Purchase' } });\n}\nreturn out;\n"
+        }
+      },
+      {
+        "id": "purch002",
+        "name": "Send Purchase to Meta CAPI",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4.2,
+        "position": [
+          1680,
+          650
+        ],
+        "parameters": {
+          "method": "POST",
+          "url": "https://graph.facebook.com/v22.0/YOUR_PIXEL_ID/events",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "Bearer REPLACE_CAPI_TOKEN"
+              },
+              {
+                "name": "Content-Type",
+                "value": "application/json"
+              }
+            ]
+          },
+          "sendBody": true,
+          "specifyBody": "json",
+          "jsonBody": "={{ JSON.stringify({ data: [ { event_name: 'Purchase', event_time: Math.floor(Date.now()/1000), event_id: 'purchase_' + $json.message_id, action_source: 'system_generated', user_data: { ph: [$json.phone_hash_sha256] }, custom_data: { currency: 'IDR', value: $json.purchase_value || 0 } } ] }) }}",
+          "options": {}
         }
       }
     ],
@@ -628,7 +758,12 @@
               "index": 0
             },
             {
-              "node": "Send QualifiedLead to Meta (disabled)",
+              "node": "Lead State Machine",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Detect Close (Purchase)",
               "type": "main",
               "index": 0
             }
@@ -645,6 +780,28 @@
             }
           ]
         ]
+      },
+      "Lead State Machine": {
+        "main": [
+          [
+            {
+              "node": "Send Lead Events to Meta CAPI",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Detect Close (Purchase)": {
+        "main": [
+          [
+            {
+              "node": "Send Purchase to Meta CAPI",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
       }
     },
     "nodeGroups": [],
@@ -654,10 +811,10 @@
     "autosaved": false,
     "workflowPublishHistory": [
       {
-        "createdAt": "2026-08-21T12:26:15.210Z",
-        "id": 61,
+        "createdAt": "2026-08-23T07:54:25.732Z",
+        "id": 89,
         "workflowId": "lNnorqofr6QwSG9a",
-        "versionId": "eb21b155-1f95-4d11-9044-595c562aacdc",
+        "versionId": "99344ac6-89ca-4b02-83f1-19be49d54e18",
         "event": "activated",
         "userId": "72739066-349e-420f-8019-538a31385ded"
       }

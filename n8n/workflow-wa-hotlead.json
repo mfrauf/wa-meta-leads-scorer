@@ -1,0 +1,666 @@
+{
+  "updatedAt": "2026-08-21T12:26:15.153Z",
+  "createdAt": "2026-08-21T04:05:54.749Z",
+  "id": "lNnorqofr6QwSG9a",
+  "name": "WA Hot Lead Scorer",
+  "description": null,
+  "active": true,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "wa-hotlead",
+        "options": {},
+        "responseData": "raw"
+      },
+      "id": "3d1ea15d3ac34d4ba241a7ee",
+      "name": "WhatsApp Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        304
+      ],
+      "webhookId": "04fd19be-73e6-46b0-9541-4d9388d24c5f"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Pass-through: parse the raw webhook body (responseData=raw) and forward the envelope.\n// HMAC verification DISABLED: n8n's webhook node mangles the raw body, so byte-exact HMAC\n// cannot be verified here. Endpoint is loopback-only (127.0.0.1). To re-enable HMAC, put a\n// raw-preserving ingress proxy in front of n8n that verifies before forwarding.\nconst items = $input.all();\nconst out = [];\nfor (const item of items) {\n  const json = item.json || {};\n  const parsed = typeof json.body === 'string' ? JSON.parse(json.body) : json.body;\n  out.push({ json: parsed });\n}\nreturn out;\n"
+      },
+      "id": "fab8ab795415443a887abdd4",
+      "name": "Verify HMAC",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        480,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst fs = require('fs');\nconst path = require('path');\nconst crypto = require('crypto');\nconst STORE = '/opt/data/projects/wa-hot-lead/store/messages.jsonl' || '/opt/data/projects/wa-hot-lead/store/messages.jsonl';\nconst storeDir = path.dirname(STORE);\nif (!fs.existsSync(storeDir)) {\n  try { fs.mkdirSync(storeDir, { recursive: true }); } catch (e) {}\n}\nconst items = $input.all();\nconst out = [];\nfor (const item of items) {\n  const root = item.json || {};\n  const envObj = (typeof root.body === 'string') ? JSON.parse(root.body) : root;\n  const p = root.payload || envObj.payload || envObj || root;\n  const rawSender = String(p.from || p.sender || '');\n  const sender = rawSender.replace('@c.us', '').replace(/\\D/g, '');\n  const message = String(p.body !== undefined ? p.body : (p.message || ''));\n  const direction = p.fromMe ? 'outbound' : 'inbound';\n  const is_group = !!(p.from && String(p.from).endsWith('@g.us')) || !!p.is_group;\n  const ts = p.timestamp ? Number(p.timestamp) : Math.floor(Date.now() / 1000);\n  const message_id = String(p.id || p.message_id || (sender + ':' + ts + ':' + crypto.createHash('sha1').update(message).digest('hex').slice(0, 12)));\n  let lines = [];\n  try {\n    if (fs.existsSync(STORE)) {\n      lines = fs.readFileSync(STORE, 'utf8').split('\\n').filter(Boolean);\n    }\n  } catch (e) {}\n  const dup = lines.some(l => {\n    try { return JSON.parse(l).message_id === message_id; } catch (e) { return false; }\n  });\n  if (!dup) {\n    const rec = { message_id, sender, message, direction, is_group, timestamp: ts, received_at: Date.now() };\n    try { fs.appendFileSync(STORE, JSON.stringify(rec) + '\\n'); } catch (e) {}\n    out.push({ json: { sender, message, direction, is_group, timestamp: ts, message_id, is_duplicate: false } });\n  }\n}\nreturn out;\n"
+      },
+      "id": "3429e95954824564a5d3207c",
+      "name": "Normalize & Dedupe",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        304
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst fs = require('fs');\nconst STORE = '/opt/data/projects/wa-hot-lead/store/messages.jsonl' || '/opt/data/projects/wa-hot-lead/store/messages.jsonl';\nconst items = $input.all();\nconst out = [];\nfor (const item of items) {\n  const sender = item.json.sender;\n  let recs = [];\n  try {\n    if (fs.existsSync(STORE)) {\n      recs = fs.readFileSync(STORE, 'utf8').split('\\n').filter(Boolean).map(l => JSON.parse(l));\n    }\n  } catch (e) {}\n  const conv = recs.filter(r => r.sender === sender).sort((a, b) => a.timestamp - b.timestamp).slice(-20);\n  const transcript = conv.map(r => (r.direction === 'outbound' ? 'Biz: ' : 'Cust: ') + r.message).join('\\n');\n  out.push({ json: { ...item.json, conversation: transcript, message_count: conv.length } });\n}\nreturn out;\n"
+      },
+      "id": "bc1d5c6058594c8b94652942",
+      "name": "Load Conversation Context",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        960,
+        304
+      ]
+    },
+    {
+      "id": "b0800165c6be4ae994df6c0b",
+      "name": "Route Hot?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1440,
+        304
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "return $input.all();"
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nconst items=$input.all();\nreturn items.filter(i=>(i.json.lead_level||'')==='hot').map(i=>({json:{...i.json, alert:`${i.json.sender} HOT (${i.json.score}): ${i.json.message}`}}));\n"
+      },
+      "id": "df2a85f87fcc4367afae016b",
+      "name": "Notify Sales (Hot)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        192
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://graph.facebook.com/v22.0/REPLACE_PIXEL_ID/events",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Authorization",
+              "value": "Bearer REPLACE_ACCESS_TOKEN"
+            }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "event_name",
+              "value": "QualifiedLead"
+            },
+            {
+              "name": "event_time",
+              "value": "={{ Math.floor(Date.now()/1000) }}"
+            },
+            {
+              "name": "action_source",
+              "value": "system_generated"
+            },
+            {
+              "name": "user_data",
+              "value": "={{ JSON.stringify({ ph: [] }) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "399cbe58a33141dc9406134c",
+      "name": "Send QualifiedLead to Meta (disabled)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [
+        1680,
+        368
+      ],
+      "disabled": true
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "\nconst items=$input.all();\nreturn items.filter(i=>(i.json.lead_level||'')!=='hot').map(i=>({json:{lead_level:i.json.lead_level, score:i.json.score}}));\n"
+      },
+      "id": "d1a9809beaf346ddbf4f0a10",
+      "name": "Log Warm/Cold",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1680,
+        528
+      ]
+    },
+    {
+      "parameters": {
+        "content": "## WA Hot Lead Scorer\n1. WAHA message.any -> /webhook/wa-hotlead\n2. Verify HMAC (WAHA_HMAC_SECRET env, SHA512)\n3. Normalize payload.* + dedupe by payload.id\n4. Rebuild last 20 messages per sender (Cust:/Biz:)\n5. Indonesian rule scoring (warm>=20, hot>=60)\n6. Is Hot? -> true: Notify Sales + [disabled] Meta; false: Log Warm/Cold\n\nBahasa rules: scoring/indonesian-rules.json\nLLM fallback: scoring/llm-classify-prompt.md\n7. Export Lead to Sheet (OAuth): every scored lead -> Google Sheet 'Leads'",
+        "height": 592,
+        "width": 1088
+      },
+      "id": "625eee949b0f4c2faf3f6140",
+      "name": "Sticky: Flow Notes",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        240,
+        -288
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit",
+          "mode": "url"
+        },
+        "sheetName": {
+          "mode": "name",
+          "__rl": false,
+          "value": "Leads"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "sender": "={{ $json.sender }}",
+            "message": "={{ $json.message }}",
+            "score": "={{ $json.score }}",
+            "lead_level": "={{ $json.lead_level }}",
+            "signals": "={{ JSON.stringify($json.signals) }}",
+            "direction": "={{ $json.direction }}",
+            "timestamp": "={{ $json.timestamp }}",
+            "message_id": "={{ $json.message_id }}"
+          }
+        },
+        "options": {}
+      },
+      "id": "a1b2c3d4e5f60001",
+      "name": "Export Lead to Sheet (OAuth)",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4,
+      "position": [
+        1440,
+        480
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "pItf5QvUkSi97F5z",
+          "name": "Google Sheets account"
+        }
+      }
+    },
+    {
+      "id": "scorellmhttps001",
+      "name": "Score Lead (LLM)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        400
+      ],
+      "parameters": {
+        "mode": "runOnceForAllItems",
+        "jsCode": "const https = require('https');\nconst fs = require('fs');\nconst PROMPT_PATH = '/opt/data/projects/wa-hot-lead/scoring/llm-classify-prompt.md';\nlet PROMPT = '';\ntry { PROMPT = fs.readFileSync(PROMPT_PATH, 'utf8').trim(); } catch (e) {}\nconst KEY = '${OPENROUTER_API_KEY}';\nfunction callLLM(userContent) {\n  return new Promise((resolve, reject) => {\n    const payload = JSON.stringify({\n      model: 'openai/gpt-oss-20b:free',\n      messages: [ { role: 'system', content: PROMPT }, { role: 'user', content: userContent } ],\n      response_format: { type: 'json_object' },\n      max_tokens: 300, temperature: 0.2\n    });\n    const req = https.request('https://openrouter.ai/api/v1/chat/completions', {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + KEY, 'Content-Length': Buffer.byteLength(payload) }\n    }, (res) => {\n      let data = '';\n      res.on('data', c => data += c);\n      res.on('end', () => { try { resolve(JSON.parse(data)); } catch(e) { reject(new Error('bad json: ' + data.slice(0,80))); } });\n    });\n    req.on('error', reject);\n    req.write(payload); req.end();\n  });\n}\nconst out = [];\nfor (const item of $input.all()) {\n  const msg = item.json.message || '';\n  const conv = item.json.conversation ? ('\\n\\nRiwayat:\\n' + item.json.conversation) : '';\n  const userContent = PROMPT + '\\n\\nBALAS HANYA JSON valid, tanpa teks pembuka:\\n' + msg + conv;\n  let level='review', score=null, signals=[], intent='', reason='LLM unavailable';\n  try {\n    const resp = await callLLM(userContent);\n    const content = (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || '{}';\n    const p = JSON.parse(content);\n    const lvl = (p.lead_level||'').toString().toLowerCase();\n    level = ['hot','warm','cold'].includes(lvl) ? lvl : 'review';\n    score = Number.isFinite(p.score) ? Math.max(0,Math.min(100,Math.round(p.score))) : null;\n    signals = Array.isArray(p.signals) ? p.signals.map(String) : [];\n    intent = String(p.intent||'');\n    reason = String(p.reason||'');\n  } catch(e) { level='review'; reason='LLM error: ' + e.message; }\n  out.push({ json: { ...item.json, lead_level: level, score, signals, intent, reason } });\n}\nreturn out;\n"
+      }
+    }
+  ],
+  "connections": {
+    "WhatsApp Webhook": {
+      "main": [
+        [
+          {
+            "node": "Verify HMAC",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify HMAC": {
+      "main": [
+        [
+          {
+            "node": "Normalize & Dedupe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize & Dedupe": {
+      "main": [
+        [
+          {
+            "node": "Load Conversation Context",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Conversation Context": {
+      "main": [
+        [
+          {
+            "node": "Score Lead (LLM)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route Hot?": {
+      "main": [
+        [
+          {
+            "node": "Notify Sales (Hot)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log Warm/Cold",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Export Lead to Sheet (OAuth)",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send QualifiedLead to Meta (disabled)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Score Lead (LLM)": {
+      "main": [
+        [
+          {
+            "node": "Route Hot?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "staticData": null,
+  "meta": null,
+  "nodeGroups": [],
+  "pinData": {},
+  "versionId": "eb21b155-1f95-4d11-9044-595c562aacdc",
+  "activeVersionId": "eb21b155-1f95-4d11-9044-595c562aacdc",
+  "versionCounter": 32,
+  "triggerCount": 1,
+  "sourceWorkflowId": null,
+  "shared": [
+    {
+      "updatedAt": "2026-08-21T04:05:54.773Z",
+      "createdAt": "2026-08-21T04:05:54.773Z",
+      "role": "workflow:owner",
+      "workflowId": "lNnorqofr6QwSG9a",
+      "projectId": "W5y7F8Arhv8VLsU6",
+      "project": {
+        "updatedAt": "2026-08-15T02:53:56.885Z",
+        "createdAt": "2026-08-15T02:52:45.039Z",
+        "id": "W5y7F8Arhv8VLsU6",
+        "name": "Admin Local <admin@local.n8n.io>",
+        "type": "personal",
+        "icon": null,
+        "description": null,
+        "customTelemetryTags": [],
+        "creatorId": "72739066-349e-420f-8019-538a31385ded"
+      }
+    }
+  ],
+  "tags": [],
+  "activeVersion": {
+    "updatedAt": "2026-08-21T12:26:15.158Z",
+    "createdAt": "2026-08-21T12:26:15.158Z",
+    "versionId": "eb21b155-1f95-4d11-9044-595c562aacdc",
+    "workflowId": "lNnorqofr6QwSG9a",
+    "nodes": [
+      {
+        "parameters": {
+          "httpMethod": "POST",
+          "path": "wa-hotlead",
+          "options": {},
+          "responseData": "raw"
+        },
+        "id": "3d1ea15d3ac34d4ba241a7ee",
+        "name": "WhatsApp Webhook",
+        "type": "n8n-nodes-base.webhook",
+        "typeVersion": 2,
+        "position": [
+          240,
+          304
+        ],
+        "webhookId": "04fd19be-73e6-46b0-9541-4d9388d24c5f"
+      },
+      {
+        "parameters": {
+          "jsCode": "\n// Pass-through: parse the raw webhook body (responseData=raw) and forward the envelope.\n// HMAC verification DISABLED: n8n's webhook node mangles the raw body, so byte-exact HMAC\n// cannot be verified here. Endpoint is loopback-only (127.0.0.1). To re-enable HMAC, put a\n// raw-preserving ingress proxy in front of n8n that verifies before forwarding.\nconst items = $input.all();\nconst out = [];\nfor (const item of items) {\n  const json = item.json || {};\n  const parsed = typeof json.body === 'string' ? JSON.parse(json.body) : json.body;\n  out.push({ json: parsed });\n}\nreturn out;\n"
+        },
+        "id": "fab8ab795415443a887abdd4",
+        "name": "Verify HMAC",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          480,
+          304
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "\nconst fs = require('fs');\nconst path = require('path');\nconst crypto = require('crypto');\nconst STORE = '/opt/data/projects/wa-hot-lead/store/messages.jsonl' || '/opt/data/projects/wa-hot-lead/store/messages.jsonl';\nconst storeDir = path.dirname(STORE);\nif (!fs.existsSync(storeDir)) {\n  try { fs.mkdirSync(storeDir, { recursive: true }); } catch (e) {}\n}\nconst items = $input.all();\nconst out = [];\nfor (const item of items) {\n  const root = item.json || {};\n  const envObj = (typeof root.body === 'string') ? JSON.parse(root.body) : root;\n  const p = root.payload || envObj.payload || envObj || root;\n  const rawSender = String(p.from || p.sender || '');\n  const sender = rawSender.replace('@c.us', '').replace(/\\D/g, '');\n  const message = String(p.body !== undefined ? p.body : (p.message || ''));\n  const direction = p.fromMe ? 'outbound' : 'inbound';\n  const is_group = !!(p.from && String(p.from).endsWith('@g.us')) || !!p.is_group;\n  const ts = p.timestamp ? Number(p.timestamp) : Math.floor(Date.now() / 1000);\n  const message_id = String(p.id || p.message_id || (sender + ':' + ts + ':' + crypto.createHash('sha1').update(message).digest('hex').slice(0, 12)));\n  let lines = [];\n  try {\n    if (fs.existsSync(STORE)) {\n      lines = fs.readFileSync(STORE, 'utf8').split('\\n').filter(Boolean);\n    }\n  } catch (e) {}\n  const dup = lines.some(l => {\n    try { return JSON.parse(l).message_id === message_id; } catch (e) { return false; }\n  });\n  if (!dup) {\n    const rec = { message_id, sender, message, direction, is_group, timestamp: ts, received_at: Date.now() };\n    try { fs.appendFileSync(STORE, JSON.stringify(rec) + '\\n'); } catch (e) {}\n    out.push({ json: { sender, message, direction, is_group, timestamp: ts, message_id, is_duplicate: false } });\n  }\n}\nreturn out;\n"
+        },
+        "id": "3429e95954824564a5d3207c",
+        "name": "Normalize & Dedupe",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          720,
+          304
+        ]
+      },
+      {
+        "parameters": {
+          "jsCode": "\nconst fs = require('fs');\nconst STORE = '/opt/data/projects/wa-hot-lead/store/messages.jsonl' || '/opt/data/projects/wa-hot-lead/store/messages.jsonl';\nconst items = $input.all();\nconst out = [];\nfor (const item of items) {\n  const sender = item.json.sender;\n  let recs = [];\n  try {\n    if (fs.existsSync(STORE)) {\n      recs = fs.readFileSync(STORE, 'utf8').split('\\n').filter(Boolean).map(l => JSON.parse(l));\n    }\n  } catch (e) {}\n  const conv = recs.filter(r => r.sender === sender).sort((a, b) => a.timestamp - b.timestamp).slice(-20);\n  const transcript = conv.map(r => (r.direction === 'outbound' ? 'Biz: ' : 'Cust: ') + r.message).join('\\n');\n  out.push({ json: { ...item.json, conversation: transcript, message_count: conv.length } });\n}\nreturn out;\n"
+        },
+        "id": "bc1d5c6058594c8b94652942",
+        "name": "Load Conversation Context",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          960,
+          304
+        ]
+      },
+      {
+        "id": "b0800165c6be4ae994df6c0b",
+        "name": "Route Hot?",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1440,
+          304
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "return $input.all();"
+        }
+      },
+      {
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "\nconst items=$input.all();\nreturn items.filter(i=>(i.json.lead_level||'')==='hot').map(i=>({json:{...i.json, alert:`${i.json.sender} HOT (${i.json.score}): ${i.json.message}`}}));\n"
+        },
+        "id": "df2a85f87fcc4367afae016b",
+        "name": "Notify Sales (Hot)",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1680,
+          192
+        ]
+      },
+      {
+        "parameters": {
+          "method": "POST",
+          "url": "https://graph.facebook.com/v22.0/REPLACE_PIXEL_ID/events",
+          "sendHeaders": true,
+          "headerParameters": {
+            "parameters": [
+              {
+                "name": "Authorization",
+                "value": "Bearer REPLACE_ACCESS_TOKEN"
+              }
+            ]
+          },
+          "sendBody": true,
+          "bodyParameters": {
+            "parameters": [
+              {
+                "name": "event_name",
+                "value": "QualifiedLead"
+              },
+              {
+                "name": "event_time",
+                "value": "={{ Math.floor(Date.now()/1000) }}"
+              },
+              {
+                "name": "action_source",
+                "value": "system_generated"
+              },
+              {
+                "name": "user_data",
+                "value": "={{ JSON.stringify({ ph: [] }) }}"
+              }
+            ]
+          },
+          "options": {}
+        },
+        "id": "399cbe58a33141dc9406134c",
+        "name": "Send QualifiedLead to Meta (disabled)",
+        "type": "n8n-nodes-base.httpRequest",
+        "typeVersion": 4,
+        "position": [
+          1680,
+          368
+        ],
+        "disabled": true
+      },
+      {
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "\nconst items=$input.all();\nreturn items.filter(i=>(i.json.lead_level||'')!=='hot').map(i=>({json:{lead_level:i.json.lead_level, score:i.json.score}}));\n"
+        },
+        "id": "d1a9809beaf346ddbf4f0a10",
+        "name": "Log Warm/Cold",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          1680,
+          528
+        ]
+      },
+      {
+        "parameters": {
+          "content": "## WA Hot Lead Scorer\n1. WAHA message.any -> /webhook/wa-hotlead\n2. Verify HMAC (WAHA_HMAC_SECRET env, SHA512)\n3. Normalize payload.* + dedupe by payload.id\n4. Rebuild last 20 messages per sender (Cust:/Biz:)\n5. Indonesian rule scoring (warm>=20, hot>=60)\n6. Is Hot? -> true: Notify Sales + [disabled] Meta; false: Log Warm/Cold\n\nBahasa rules: scoring/indonesian-rules.json\nLLM fallback: scoring/llm-classify-prompt.md\n7. Export Lead to Sheet (OAuth): every scored lead -> Google Sheet 'Leads'",
+          "height": 592,
+          "width": 1088
+        },
+        "id": "625eee949b0f4c2faf3f6140",
+        "name": "Sticky: Flow Notes",
+        "type": "n8n-nodes-base.stickyNote",
+        "typeVersion": 1,
+        "position": [
+          240,
+          -288
+        ]
+      },
+      {
+        "parameters": {
+          "operation": "append",
+          "documentId": {
+            "__rl": true,
+            "value": "https://docs.google.com/spreadsheets/d/YOUR_SPREADSHEET_ID/edit",
+            "mode": "url"
+          },
+          "sheetName": {
+            "mode": "name",
+            "__rl": false,
+            "value": "Leads"
+          },
+          "columns": {
+            "mappingMode": "defineBelow",
+            "value": {
+              "sender": "={{ $json.sender }}",
+              "message": "={{ $json.message }}",
+              "score": "={{ $json.score }}",
+              "lead_level": "={{ $json.lead_level }}",
+              "signals": "={{ JSON.stringify($json.signals) }}",
+              "direction": "={{ $json.direction }}",
+              "timestamp": "={{ $json.timestamp }}",
+              "message_id": "={{ $json.message_id }}"
+            }
+          },
+          "options": {}
+        },
+        "id": "a1b2c3d4e5f60001",
+        "name": "Export Lead to Sheet (OAuth)",
+        "type": "n8n-nodes-base.googleSheets",
+        "typeVersion": 4,
+        "position": [
+          1440,
+          480
+        ],
+        "credentials": {
+          "googleSheetsOAuth2Api": {
+            "id": "pItf5QvUkSi97F5z",
+            "name": "Google Sheets account"
+          }
+        }
+      },
+      {
+        "id": "scorellmhttps001",
+        "name": "Score Lead (LLM)",
+        "type": "n8n-nodes-base.code",
+        "typeVersion": 2,
+        "position": [
+          840,
+          400
+        ],
+        "parameters": {
+          "mode": "runOnceForAllItems",
+          "jsCode": "const https = require('https');\nconst fs = require('fs');\nconst PROMPT_PATH = '/opt/data/projects/wa-hot-lead/scoring/llm-classify-prompt.md';\nlet PROMPT = '';\ntry { PROMPT = fs.readFileSync(PROMPT_PATH, 'utf8').trim(); } catch (e) {}\nconst KEY = '${OPENROUTER_API_KEY}';\nfunction callLLM(userContent) {\n  return new Promise((resolve, reject) => {\n    const payload = JSON.stringify({\n      model: 'openai/gpt-oss-20b:free',\n      messages: [ { role: 'system', content: PROMPT }, { role: 'user', content: userContent } ],\n      response_format: { type: 'json_object' },\n      max_tokens: 300, temperature: 0.2\n    });\n    const req = https.request('https://openrouter.ai/api/v1/chat/completions', {\n      method: 'POST',\n      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + KEY, 'Content-Length': Buffer.byteLength(payload) }\n    }, (res) => {\n      let data = '';\n      res.on('data', c => data += c);\n      res.on('end', () => { try { resolve(JSON.parse(data)); } catch(e) { reject(new Error('bad json: ' + data.slice(0,80))); } });\n    });\n    req.on('error', reject);\n    req.write(payload); req.end();\n  });\n}\nconst out = [];\nfor (const item of $input.all()) {\n  const msg = item.json.message || '';\n  const conv = item.json.conversation ? ('\\n\\nRiwayat:\\n' + item.json.conversation) : '';\n  const userContent = PROMPT + '\\n\\nBALAS HANYA JSON valid, tanpa teks pembuka:\\n' + msg + conv;\n  let level='review', score=null, signals=[], intent='', reason='LLM unavailable';\n  try {\n    const resp = await callLLM(userContent);\n    const content = (resp.choices && resp.choices[0] && resp.choices[0].message && resp.choices[0].message.content) || '{}';\n    const p = JSON.parse(content);\n    const lvl = (p.lead_level||'').toString().toLowerCase();\n    level = ['hot','warm','cold'].includes(lvl) ? lvl : 'review';\n    score = Number.isFinite(p.score) ? Math.max(0,Math.min(100,Math.round(p.score))) : null;\n    signals = Array.isArray(p.signals) ? p.signals.map(String) : [];\n    intent = String(p.intent||'');\n    reason = String(p.reason||'');\n  } catch(e) { level='review'; reason='LLM error: ' + e.message; }\n  out.push({ json: { ...item.json, lead_level: level, score, signals, intent, reason } });\n}\nreturn out;\n"
+        }
+      }
+    ],
+    "connections": {
+      "WhatsApp Webhook": {
+        "main": [
+          [
+            {
+              "node": "Verify HMAC",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Verify HMAC": {
+        "main": [
+          [
+            {
+              "node": "Normalize & Dedupe",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Normalize & Dedupe": {
+        "main": [
+          [
+            {
+              "node": "Load Conversation Context",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Load Conversation Context": {
+        "main": [
+          [
+            {
+              "node": "Score Lead (LLM)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Route Hot?": {
+        "main": [
+          [
+            {
+              "node": "Notify Sales (Hot)",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Log Warm/Cold",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Export Lead to Sheet (OAuth)",
+              "type": "main",
+              "index": 0
+            },
+            {
+              "node": "Send QualifiedLead to Meta (disabled)",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      },
+      "Score Lead (LLM)": {
+        "main": [
+          [
+            {
+              "node": "Route Hot?",
+              "type": "main",
+              "index": 0
+            }
+          ]
+        ]
+      }
+    },
+    "nodeGroups": [],
+    "authors": "Admin Local",
+    "name": null,
+    "description": null,
+    "autosaved": false,
+    "workflowPublishHistory": [
+      {
+        "createdAt": "2026-08-21T12:26:15.210Z",
+        "id": 61,
+        "workflowId": "lNnorqofr6QwSG9a",
+        "versionId": "eb21b155-1f95-4d11-9044-595c562aacdc",
+        "event": "activated",
+        "userId": "72739066-349e-420f-8019-538a31385ded"
+      }
+    ]
+  }
+}

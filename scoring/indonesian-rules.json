@@ -1,0 +1,74 @@
+{
+  "version": "1.0",
+  "language": "id",
+  "thresholds": {
+    "hot": 60,
+    "warm": 20,
+    "cold": 0
+  },
+  "categories": {
+    "harga": {
+      "weight": 10,
+      "keywords": [
+        "harga",
+        "brp",
+        "berapa",
+        "hrg",
+        "hargax"
+      ]
+    },
+    "beli": {
+      "weight": 25,
+      "keywords": [
+        "beli",
+        "order",
+        "checkout",
+        "ambil",
+        "mau nih",
+        "sedia"
+      ]
+    },
+    "bayar": {
+      "weight": 25,
+      "keywords": [
+        "bayar",
+        "transfer",
+        "cod",
+        "dana",
+        "ovo",
+        "qris",
+        "tf"
+      ]
+    },
+    "kirim": {
+      "weight": 25,
+      "keywords": [
+        "kirim",
+        "antar",
+        "ekspedisi",
+        "jne",
+        "sicepat",
+        "pos"
+      ]
+    },
+    "jumlah": {
+      "weight": 15,
+      "keywords": [
+        "pcs",
+        "botol",
+        "dus",
+        "kotak",
+        "lusin"
+      ]
+    },
+    "siap": {
+      "weight": 15,
+      "keywords": [
+        "ready",
+        "stok",
+        "ada"
+      ]
+    }
+  },
+  "notes": "Normalize slang: ga/gak/nggak, brp/berapa, ny/nya, udh/udah, yg, min, kak are not intent. 'k' = ribu in price parsing."
+}

@@ -120,6 +120,26 @@ The Meta node ships **disabled** on purpose. When ready:
 4. Verify events appear in Events Manager (look for `LeadHot`, `LeadWarm`, `LeadCold`).
 5. Create custom audiences from each event name, then build your campaign structure per the table above.
 
+## Closing deals: the Purchase signal (the money event)
+
+Lead events tell Meta *intent*. The `Purchase` event tells Meta *revenue* — the strongest signal Meta's AI optimizer can learn from.
+
+When you close a deal (payment received), send yourself a WhatsApp message from your own number:
+
+```
+close 628555000333 750000
+```
+
+**Format:** `close <customer-phone> <amount>` — amount optional but recommended.
+
+The tool then:
+1. Detects your message (only YOUR outbound messages can trigger this, never customer messages)
+2. SHA-256 hashes the customer's phone
+3. Fires one `Purchase` event to Meta with `value` + `currency: IDR`
+4. Dedupes: the same phone can only be closed once (no accidental double-fires)
+
+**Why bother:** with Purchase in your event hierarchy (`LeadCold → LeadWarm → LeadHot → Purchase`), Meta optimizes toward actual revenue instead of chat enthusiasm. Your lookalike audience should also be seeded from purchasers, not just hot leads.
+
 ## Files
 
 ```

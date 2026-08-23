@@ -1,0 +1,270 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhatsApp Lead Funnel → Meta Audiences</title>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:#020617; color:#e2e8f0; font-family:'JetBrains Mono',monospace; padding:32px; }
+  .header { margin-bottom:24px; }
+  .title-row { display:flex; align-items:center; gap:10px; }
+  .pulse { width:10px; height:10px; border-radius:50%; background:#34d399; animation:pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  h1 { font-size:18px; font-weight:700; letter-spacing:.5px; }
+  .subtitle { font-size:11px; color:#94a3b8; margin-top:4px; }
+  .canvas-wrap { background:#0f172a; border:1px solid #1e293b; border-radius:12px; padding:20px; }
+  svg { width:100%; height:auto; display:block; }
+  .cards { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-top:16px; }
+  @media (max-width:800px){ .cards{grid-template-columns:1fr;} }
+  .card { background:#0f172a; border:1px solid #1e293b; border-radius:10px; padding:14px 16px; }
+  .card-header { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
+  .card-dot { width:8px; height:8px; border-radius:50%; }
+  .cyan{background:#22d3ee}.emerald{background:#34d399}.violet{background:#a78bfa}
+  .card h3 { font-size:12px; font-weight:700; }
+  .card ul { list-style:none; font-size:10.5px; color:#94a3b8; line-height:1.7; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="title-row"><div class="pulse"></div><h1>WHATSAPP LEAD FUNNEL → META AUDIENCES</h1></div>
+  <div class="subtitle">State-change signals · exclusion stacking · lookalike seeding</div>
+</div>
+
+<div class="canvas-wrap">
+<svg viewBox="0 0 1200 760" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <path d="M 40 0 L 0 0 L 0 40" fill="none" stroke="#1e293b" stroke-width="0.5"/>
+    </pattern>
+    <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#64748b"/>
+    </marker>
+    <marker id="arrowCyan" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#22d3ee"/>
+    </marker>
+    <marker id="arrowEmerald" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" fill="#34d399"/>
+    </marker>
+  </defs>
+
+  <rect width="1200" height="760" fill="#020617"/>
+  <rect width="1200" height="760" fill="url(#grid)"/>
+
+  <!-- ============ ARROWS (behind boxes) ============ -->
+  <!-- WAHA -> n8n -->
+  <line x1="240" y1="110" x2="330" y2="110" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <!-- n8n pipeline -->
+  <line x1="450" y1="110" x2="530" y2="110" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+  <line x1="650" y1="110" x2="730" y2="110" stroke="#64748b" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- state machine branch arrows down to CAPI -->
+  <line x1="830" y1="140" x2="830" y2="230" stroke="#fb923c" stroke-width="1.5" stroke-dasharray="5,3" marker-end="url(#arrow)"/>
+  <!-- only-on-change annotation arrow -->
+  <line x1="905" y1="185" x2="985" y2="185" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3,3"/>
+
+  <!-- Sheets export -->
+  <line x1="750" y1="140" x2="600" y2="230" stroke="#a78bfa" stroke-width="1.2" stroke-dasharray="5,3" marker-end="url(#arrow)"/>
+
+  <!-- CAPI -> audiences -->
+  <line x1="830" y1="290" x2="300" y2="395" stroke="#22d3ee" stroke-width="1.5" marker-end="url(#arrowCyan)"/>
+  <line x1="850" y1="290" x2="620" y2="395" stroke="#34d399" stroke-width="1.5" marker-end="url(#arrowEmerald)"/>
+  <line x1="870" y1="290" x2="940" y2="395" stroke="#fb7185" stroke-width="1.5" marker-end="url(#arrow)"/>
+
+  <!-- campaign exclusion arrows -->
+  <line x1="300" y1="455" x2="430" y2="520" stroke="#22d3ee" stroke-width="1.2" stroke-dasharray="4,4" marker-end="url(#arrow)"/>
+  <line x1="620" y1="455" x2="500" y2="520" stroke="#34d399" stroke-width="1.2" stroke-dasharray="4,4" marker-end="url(#arrow)"/>
+  <line x1="940" y1="455" x2="940" y2="520" stroke="#fb7185" stroke-width="1.2" stroke-dasharray="4,4" marker-end="url(#arrow)"/>
+
+  <!-- hot seed -> lookalike -->
+  <line x1="1010" y1="480" x2="1080" y2="525" stroke="#fb7185" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+  <!-- progression arrows between campaigns (bottom) -->
+  <line x1="360" y1="640" x2="430" y2="640" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow)"/>
+  <line x1="550" y1="640" x2="620" y2="640" stroke="#64748b" stroke-width="1.2" marker-end="url(#arrow)"/>
+
+  <!-- ============ LEFT COLUMN: PIPELINE ============ -->
+  <!-- WAHA -->
+  <g>
+    <rect x="100" y="80" width="140" height="60" rx="6" fill="#0f172a"/>
+    <rect x="100" y="80" width="140" height="60" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+    <text x="170" y="105" text-anchor="middle" fill="#e2e8f0" font-size="12" font-weight="700">WAHA</text>
+    <text x="170" y="122" text-anchor="middle" fill="#64748b" font-size="8">whatsapp gateway</text>
+  </g>
+
+  <!-- n8n webhook+normalize -->
+  <g>
+    <rect x="330" y="80" width="120" height="60" rx="6" fill="#0f172a"/>
+    <rect x="330" y="80" width="120" height="60" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+    <text x="390" y="102" text-anchor="middle" fill="#e2e8f0" font-size="12" font-weight="700">NORMALIZE</text>
+    <text x="390" y="117" text-anchor="middle" fill="#64748b" font-size="8">@c.us → phone + hash</text>
+    <text x="390" y="129" text-anchor="middle" fill="#fb7185" font-size="8">@lid → not matchable</text>
+  </g>
+
+  <!-- LLM scorer -->
+  <g>
+    <rect x="530" y="80" width="120" height="60" rx="6" fill="#0f172a"/>
+    <rect x="530" y="80" width="120" height="60" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+    <text x="590" y="102" text-anchor="middle" fill="#e2e8f0" font-size="12" font-weight="700">LLM SCORE</text>
+    <text x="590" y="119" text-anchor="middle" fill="#64748b" font-size="8">hot / warm / cold</text>
+  </g>
+
+  <!-- state machine -->
+  <g>
+    <rect x="730" y="80" width="200" height="60" rx="6" fill="#0f172a"/>
+    <rect x="730" y="80" width="200" height="60" rx="6" fill="rgba(251,146,60,0.3)" stroke="#fb923c" stroke-width="1.5"/>
+    <text x="830" y="102" text-anchor="middle" fill="#e2e8f0" font-size="12" font-weight="700">STATE MACHINE</text>
+    <text x="830" y="118" text-anchor="middle" fill="#64748b" font-size="8">fire event ONLY when level changes</text>
+  </g>
+  <text x="992" y="180" fill="#94a3b8" font-size="8">same level again → no event</text>
+
+  <!-- Google sheets -->
+  <g>
+    <rect x="500" y="230" width="160" height="50" rx="6" fill="#0f172a"/>
+    <rect x="500" y="230" width="160" height="50" rx="6" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+    <text x="580" y="250" text-anchor="middle" fill="#e2e8f0" font-size="11" font-weight="700">GOOGLE SHEETS</text>
+    <text x="580" y="266" text-anchor="middle" fill="#64748b" font-size="8">full log · every message</text>
+  </g>
+
+  <!-- CAPI node -->
+  <g>
+    <rect x="720" y="230" width="220" height="60" rx="6" fill="#0f172a"/>
+    <rect x="720" y="230" width="220" height="60" rx="6" fill="rgba(251,146,60,0.3)" stroke="#fb923c" stroke-width="1.5"/>
+    <text x="830" y="252" text-anchor="middle" fill="#e2e8f0" font-size="12" font-weight="700">META CAPI</text>
+    <text x="830" y="268" text-anchor="middle" fill="#64748b" font-size="8">LeadHot / LeadWarm / LeadCold events</text>
+    <text x="830" y="280" text-anchor="middle" fill="#64748b" font-size="8">sha256(phone) · event_id dedup</text>
+  </g>
+
+  <!-- ============ MIDDLE: AUDIENCES ============ -->
+  <rect x="150" y="370" width="900" height="130" rx="12" fill="none" stroke="#fbbf24" stroke-width="1" stroke-dasharray="8,4" opacity="0.6"/>
+  <text x="165" y="390" fill="#fbbf24" font-size="9" opacity="0.8">META AUDIENCES — append-only pools</text>
+
+  <!-- cold audience -->
+  <g>
+    <rect x="190" y="400" width="220" height="55" rx="6" fill="#0f172a"/>
+    <rect x="190" y="400" width="220" height="55" rx="6" fill="rgba(8,51,68,0.4)" stroke="#22d3ee" stroke-width="1.5"/>
+    <text x="300" y="422" text-anchor="middle" fill="#22d3ee" font-size="12" font-weight="700">AUD: LEADCOLD</text>
+    <text x="300" y="440" text-anchor="middle" fill="#64748b" font-size="8">from LeadCold event · 30d window</text>
+  </g>
+
+  <!-- warm audience -->
+  <g>
+    <rect x="510" y="400" width="220" height="55" rx="6" fill="#0f172a"/>
+    <rect x="510" y="400" width="220" height="55" rx="6" fill="rgba(6,78,59,0.4)" stroke="#34d399" stroke-width="1.5"/>
+    <text x="620" y="422" text-anchor="middle" fill="#34d399" font-size="12" font-weight="700">AUD: LEADWARM</text>
+    <text x="620" y="440" text-anchor="middle" fill="#64748b" font-size="8">from LeadWarm event · 30d window</text>
+  </g>
+
+  <!-- hot audience -->
+  <g>
+    <rect x="830" y="400" width="220" height="55" rx="6" fill="#0f172a"/>
+    <rect x="830" y="400" width="220" height="55" rx="6" fill="rgba(136,19,55,0.4)" stroke="#fb7185" stroke-width="1.5"/>
+    <text x="940" y="422" text-anchor="middle" fill="#fb7185" font-size="12" font-weight="700">AUD: LEADHOT</text>
+    <text x="940" y="440" text-anchor="middle" fill="#64748b" font-size="8">from LeadHot event · 30d window</text>
+  </g>
+
+  <!-- ============ BOTTOM: CAMPAIGNS ============ -->
+  <!-- Campaign A nurture -->
+  <g>
+    <rect x="230" y="590" width="260" height="100" rx="6" fill="#0f172a"/>
+    <rect x="230" y="590" width="260" height="100" rx="6" fill="rgba(8,51,68,0.35)" stroke="#22d3ee" stroke-width="1.2"/>
+    <text x="360" y="615" text-anchor="middle" fill="#22d3ee" font-size="11" font-weight="700">A · NURTURE</text>
+    <text x="360" y="633" text-anchor="middle" fill="#94a3b8" font-size="8.5">educate / soft content</text>
+    <line x1="250" y1="645" x2="470" y2="645" stroke="#1e293b" stroke-width="1"/>
+    <text x="360" y="662" text-anchor="middle" fill="#22d3ee" font-size="8.5">target: LeadCold</text>
+    <text x="360" y="676" text-anchor="middle" fill="#fb7185" font-size="8.5">exclude: Warm ∪ Hot</text>
+  </g>
+
+  <!-- Campaign B consideration -->
+  <g>
+    <rect x="430" y="590" width="260" height="100" rx="6" fill="#0f172a"/>
+    <rect x="430" y="590" width="260" height="100" rx="6" fill="rgba(6,78,59,0.35)" stroke="#34d399" stroke-width="1.2"/>
+    <text x="560" y="615" text-anchor="middle" fill="#34d399" font-size="11" font-weight="700">B · CONSIDERATION</text>
+    <text x="560" y="633" text-anchor="middle" fill="#94a3b8" font-size="8.5">offer / proof / urgency</text>
+    <line x1="450" y1="645" x2="670" y2="645" stroke="#1e293b" stroke-width="1"/>
+    <text x="560" y="662" text-anchor="middle" fill="#34d399" font-size="8.5">target: LeadWarm</text>
+    <text x="560" y="676" text-anchor="middle" fill="#fb7185" font-size="8.5">exclude: Hot</text>
+  </g>
+
+  <!-- Campaign C close -->
+  <g>
+    <rect x="630" y="590" width="260" height="100" rx="6" fill="#0f172a"/>
+    <rect x="630" y="590" width="260" height="100" rx="6" fill="rgba(136,19,55,0.35)" stroke="#fb7185" stroke-width="1.2"/>
+    <text x="760" y="615" text-anchor="middle" fill="#fb7185" font-size="11" font-weight="700">C · CLOSE</text>
+    <text x="760" y="633" text-anchor="middle" fill="#94a3b8" font-size="8.5">direct offer / scarcity</text>
+    <line x1="650" y1="645" x2="870" y2="645" stroke="#1e293b" stroke-width="1"/>
+    <text x="760" y="662" text-anchor="middle" fill="#fb7185" font-size="8.5">target: LeadHot</text>
+    <text x="760" y="676" text-anchor="middle" fill="#64748b" font-size="8.5">no exclusions needed</text>
+  </g>
+
+  <!-- lookalike -->
+  <g>
+    <rect x="950" y="595" width="200" height="90" rx="6" fill="#0f172a"/>
+    <rect x="950" y="595" width="200" height="90" rx="6" fill="rgba(76,29,149,0.4)" stroke="#a78bfa" stroke-width="1.5"/>
+    <text x="1050" y="620" text-anchor="middle" fill="#a78bfa" font-size="11" font-weight="700">LOOKALIKE 1%</text>
+    <text x="1050" y="638" text-anchor="middle" fill="#94a3b8" font-size="8.5">seeded from LeadHot</text>
+    <text x="1050" y="652" text-anchor="middle" fill="#94a3b8" font-size="8.5">→ prospecting campaign</text>
+  </g>
+
+  <!-- movement example annotation -->
+  <g>
+    <rect x="60" y="380" width="110" height="95" rx="6" fill="#0f172a" stroke="#1e293b" stroke-width="1"/>
+    <text x="115" y="400" text-anchor="middle" fill="#94a3b8" font-size="8" font-weight="700">MOVEMENT</text>
+    <text x="115" y="418" text-anchor="middle" fill="#22d3ee" font-size="8">cold → warm:</text>
+    <text x="115" y="430" text-anchor="middle" fill="#64748b" font-size="7.5">fires LeadWarm,</text>
+    <text x="115" y="441" text-anchor="middle" fill="#64748b" font-size="7.5">stays in Cold pool</text>
+    <text x="115" y="441" opacity="0">.</text>
+    <text x="115" y="456" text-anchor="middle" fill="#fb7185" font-size="8">warm → hot:</text>
+    <text x="115" y="468" text-anchor="middle" fill="#64748b" font-size="7.5">exclusions lift them</text>
+    <text x="115" y="479" text-anchor="middle" fill="#64748b" font-size="7.5">out of A &amp; B targeting</text>
+  </g>
+
+  <!-- legend -->
+  <g>
+    <rect x="150" y="710" width="900" height="36" rx="6" fill="#0f172a" stroke="#1e293b" stroke-width="1"/>
+    <circle cx="180" cy="728" r="4" fill="#22d3ee"/><text x="192" y="731" fill="#94a3b8" font-size="8.5">cold path</text>
+    <circle cx="290" cy="728" r="4" fill="#34d399"/><text x="302" y="731" fill="#94a3b8" font-size="8.5">warm path</text>
+    <circle cx="400" cy="728" r="4" fill="#fb7185"/><text x="412" y="731" fill="#94a3b8" font-size="8.5">hot path / exclusions</text>
+    <circle cx="560" cy="728" r="4" fill="#fb923c"/><text x="572" y="731" fill="#94a3b8" font-size="8.5">CAPI signal (state change only)</text>
+    <circle cx="770" cy="728" r="4" fill="#a78bfa"/><text x="782" y="731" fill="#94a3b8" font-size="8.5">sheets log / lookalike</text>
+    <text x="1035" y="731" fill="#475569" font-size="8">audiences never shrink by API</text>
+  </g>
+</svg>
+</div>
+
+<div class="cards">
+  <div class="card">
+    <div class="card-header"><div class="card-dot cyan"></div><h3>Why no "remove from pool"</h3></div>
+    <ul>
+      <li>• Meta custom audiences are append-only</li>
+      <li>• You never delete a member via API</li>
+      <li>• Membership expires via the retention window (e.g. 30 days since last event)</li>
+      <li>• So "movement" is simulated with exclusions, not edits</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-dot emerald"></div><h3>How someone "moves" cold → hot</h3></div>
+    <ul>
+      <li>• First chat scores warm → fires LeadWarm once</li>
+      <li>• Later replies score hot → fires LeadHot once</li>
+      <li>• They now sit in BOTH Warm and Hot pools</li>
+      <li>• Campaign B excludes Hot → they stop seeing B, start seeing C</li>
+    </ul>
+  </div>
+  <div class="card">
+    <div class="card-header"><div class="card-dot violet"></div><h3>What this tool sends</h3></div>
+    <ul>
+      <li>• Only on state change (no duplicate spam)</li>
+      <li>• sha256(phone) for advanced matching</li>
+      <li>• event_id = message_id for CAPI dedup</li>
+      <li>• @lid senders skipped (not matchable)</li>
+    </ul>
+  </div>
+</div>
+
+<div style="margin-top:16px;text-align:center;color:#475569;font-size:9px;">
+  wa-hot-lead scorer → meta funnel illustration · generated for review
+</div>
+</body>
+</html>

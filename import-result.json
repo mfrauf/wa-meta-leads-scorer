@@ -1,9 +1,0 @@
-{
-  "workflow_id": "lNnorqofr6QwSG9a",
-  "active": false,
-  "name": "WA Hot Lead Scorer",
-  "disabled_nodes": [
-    "Send QualifiedLead to Meta (disabled)"
-  ],
-  "nodes": 10
-}

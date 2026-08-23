@@ -127,7 +127,7 @@ Lead events tell Meta *intent*. The `Purchase` event tells Meta *revenue* — th
 When you close a deal (payment received), send yourself a WhatsApp message from your own number:
 
 ```
-close 628555000333 750000
+close 628XXXXXXX01 750000
 ```
 
 **Format:** `close <customer-phone> <amount>` — amount optional but recommended.

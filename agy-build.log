@@ -1,0 +1,52 @@
+The implementation specified in [PRD.md](file:///opt/data/projects/wa-hot-lead/PRD.md) and [plan.md](file:///opt/data/projects/wa-hot-lead/plan.md) has been built in `/opt/data/projects/wa-hot-lead`.
+
+---
+
+### 1. What Was Built
+
+- **Containerized WAHA Service**: Loopback-isolated Docker Compose config (`127.0.0.1:3000`) for WhatsApp Webhook ingestion.
+- **WAHA Session Management**: Script to initialize the `default` session with HMAC-SHA512 signing, exponential retries (5 attempts, 2s delay), and QR code retrieval instructions for test pairing.
+- **n8n Scoring Pipeline**: Complete rebuilt workflow (`active: false`) containing the exact 10 nodes:
+  1. [`WhatsApp Webhook`](file:///opt/data/projects/wa-hot-lead/n8n/workflow-wa-hotlead.json) (`POST /webhook/wa-hotlead`)
+  2. [`Verify HMAC`](file:///opt/data/projects/wa-hot-lead/n8n/workflow-wa-hotlead.json) (Recomputes HMAC-SHA512 over payload, verifies `X-Webhook-Hmac`, rejects on mismatch)
+  3. [`Normalize & Dedupe`](file:///opt/data/projects/wa-hot-lead/n8n/workflow-wa-hotlead.json) (Normalizes fields, strips `@c.us`, dedupes against local JSONL store by `payload.id`)
+  4. [`Load Conversation Context`](file:///opt/data/projects/wa-hot-lead/n8n/workflow-wa-hotlead.json) (Reconstructs last 20 messages per sender with `Cust:` / `Biz:` tags)
+  5. [`Score Lead (ID Rules)`](file:///opt/data/projects/wa-hot-lead/n8n/workflow-wa-hotlead.json) (Bahasa Indonesia dictionary scoring with `warm >= 20`, `hot >= 60`, and intent-question boost)
+  6. [`Is Hot?`](file:///opt/data/projects/wa-hot-lead/n8n/workflow-wa-hotlead.json) (Branches on `lead_level == hot`)
+  7. [`Notify Sales (Hot)`](file:///opt/data/projects/wa-hot-lead/n8n/workflow-wa-hotlead.json) (Builds alert `{sender} HOT ({score}): {message}`)
+  8. [`Send QualifiedLead to Meta (disabled)`](file:///opt/data/projects/wa-hot-lead/n8n/workflow-wa-hotlead.json) (`disabled: true`, placeholder for Pixel ID/token and hashed PII)
+  9. [`Log Warm/Cold`](file:///opt/data/projects/wa-hot-lead/n8n/workflow-wa-hotlead.json) (Logs non-hot leads)
+  10. `Sticky: Flow Notes` (Architectural flow documentation)
+- **Scoring Rules & Prompts**: Bahasa keyword dictionary with corrected threshold (`warm: 20`) and LLM fallback prompt for JSON classification.
+- **Operator Runbook & REST Importer**: [`README.md`](file:///opt/data/projects/wa-hot-lead/README.md) runbook and [`scripts/import-workflow.sh`](file:///opt/data/projects/wa-hot-lead/scripts/import-workflow.sh) to import the workflow into n8n without auto-activating.
+
+---
+
+### 2. Files Created
+
+- [`docker-compose.yml`](file:///opt/data/projects/wa-hot-lead/docker-compose.yml): WAHA container definition.
+- [`waha/.env.example`](file:///opt/data/projects/wa-hot-lead/waha/.env.example): Environment variable template for WAHA credentials and HMAC secret.
+- [`waha/start-session.sh`](file:///opt/data/projects/wa-hot-lead/waha/start-session.sh): Session configuration script with HMAC and retry policy.
+- [`n8n/workflow-wa-hotlead.json`](file:///opt/data/projects/wa-hot-lead/n8n/workflow-wa-hotlead.json): n8n workflow definition.
+- [`scoring/indonesian-rules.json`](file:///opt/data/projects/wa-hot-lead/scoring/indonesian-rules.json): Indonesian intent keyword dictionary.
+- [`scoring/llm-classify-prompt.md`](file:///opt/data/projects/wa-hot-lead/scoring/llm-classify-prompt.md): LLM fallback prompt.
+- [`README.md`](file:///opt/data/projects/wa-hot-lead/README.md): Operator runbook covering Gates 0 through 4.
+- [`scripts/import-workflow.sh`](file:///opt/data/projects/wa-hot-lead/scripts/import-workflow.sh): Workflow import script via n8n REST API.
+
+---
+
+### 3. Verification Results
+
+- **JSON / YAML Validation**: Passed for [`n8n/workflow-wa-hotlead.json`](file:///opt/data/projects/wa-hot-lead/n8n/workflow-wa-hotlead.json), [`scoring/indonesian-rules.json`](file:///opt/data/projects/wa-hot-lead/scoring/indonesian-rules.json), and [`docker-compose.yml`](file:///opt/data/projects/wa-hot-lead/docker-compose.yml).
+- **Node JS Syntax Check (`node --check`)**: Passed for all Code nodes (`Verify HMAC`, `Normalize & Dedupe`, `Load Conversation Context`, `Score Lead (ID Rules)`).
+- **Compose Config Check**: Validated configuration.
+
+---
+
+### 4. Blockers & Open Items (Operator Gates)
+
+- **No Technical Blockers**: Static build and planning phase is complete (Gate 0 passed).
+- **Pending Operator Actions**:
+  1. **Gate 1**: Scan QR code on a dedicated **test WhatsApp number** (`GET http://127.0.0.1:3000/api/default/auth/qr?format=image`).
+  2. **Gate 2 / 3**: Select LLM fallback provider and calibrate scoring precision on >= 10 real sample chats.
+  3. **Gate 4**: Obtain explicit approval before adding Meta credentials and enabling the Meta Conversions API node.
